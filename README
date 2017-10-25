@@ -1,0 +1,5 @@
+This is the infrastructure for the branch prediction competition.
+This infrastructure was updated on September 5, 2017 to include a default
+indirect branch predictor and provide a new set of traces.
+
+See doc/index.html for "complete" documentation.
