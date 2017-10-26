@@ -7,7 +7,7 @@
 #include <cstring>
 
 #define H 64		 //NUmber of weight tables or pipeline stages
-#define NUM_WTS 2048 //Number of weights per table
+#define NUM_WTS 8192 //Number of weights per table
 #define MASK 0x000003FF
 #define MASK_BITS 10
 #define MAX_WEIGHT 127
@@ -37,7 +37,7 @@ class my_predictor : public branch_predictor
 	unsigned int history;
 	unsigned int path;
 
-	int weight_tables[H][NUM_WTS];
+	char weight_tables[H][NUM_WTS];
 	unsigned int targets[1 << TARGET_BITS];
 
 	my_predictor(void) : history(0), path(0)
@@ -89,7 +89,7 @@ class my_predictor : public branch_predictor
 		{
 			for (int i = 0; i < H; i++)
 			{
-				int *c = &weight_tables[i][((my_update *)u)->weight_index[i]];
+				char *c = &weight_tables[i][((my_update *)u)->weight_index[i]];
 				if (taken)
 				{
 					if (*c < MAX_WEIGHT)
