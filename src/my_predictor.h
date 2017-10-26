@@ -1,58 +1,117 @@
 // my_predictor.h
 // This file contains a sample my_predictor class.
-// It has a simple 32,768-entry gshare with a history length of 15 and a
-// simple direct-mapped branch target buffer for indirect branch prediction.
+// Merging Gshare and Path indexing in perceptron predictor
 
-class my_update : public branch_update {
-public:
-	unsigned int index;
+#include <cmath>
+#include <cstddef>
+#include <cstring>
+
+#define H 64		 //NUmber of weight tables or pipeline stages
+#define NUM_WTS 2048 //Number of weights per table
+#define MASK 0x000003FF
+#define MASK_BITS 10
+#define MAX_WEIGHT 127
+#define MIN_WEIGHT -128
+#define TARGET_BITS 15
+
+class my_update : public branch_update
+{
+  public:
+	unsigned int weight_index[H];
+	int perceptron_output;
+
+	my_update(void)
+	{
+		memset(weight_index, 0, sizeof(weight_index));
+		perceptron_output = 0;
+	}
 };
 
-class my_predictor : public branch_predictor {
-public:
-#define HISTORY_LENGTH	15
-#define TABLE_BITS	15
+class my_predictor : public branch_predictor
+{
+  public:
+	static const unsigned int theta = 1.93 * H + 14;
 	my_update u;
 	branch_info bi;
-	unsigned int history;
-	unsigned char tab[1<<TABLE_BITS];
-	unsigned int targets[1<<TABLE_BITS];
 
-	my_predictor (void) : history(0) { 
-		memset (tab, 0, sizeof (tab));
-		memset (targets, 0, sizeof (targets));
+	unsigned int history;
+	unsigned int path;
+
+	int weight_tables[H][NUM_WTS];
+	unsigned int targets[1 << TARGET_BITS];
+
+	my_predictor(void) : history(0), path(0)
+	{
+		memset(weight_tables, 0, sizeof(weight_tables));
+		memset(targets, 0, sizeof(targets));
 	}
 
-	branch_update *predict (branch_info & b) {
+	branch_update *predict(branch_info &b)
+	{
 		bi = b;
-		if (b.br_flags & BR_CONDITIONAL) {
-			u.index = 
-				  (history << (TABLE_BITS - HISTORY_LENGTH)) 
-				^ (b.address & ((1<<TABLE_BITS)-1));
-			u.direction_prediction (tab[u.index] >> 1);
-		} else {
-			u.direction_prediction (true);
+		if (b.br_flags & BR_CONDITIONAL)
+		{
+			u.weight_index[0] = ((b.address) % (NUM_WTS));
+			u.perceptron_output = weight_tables[0][u.weight_index[0]];
+
+			unsigned int segment;
+			for (int i = 1; i < H; i++)
+			{
+				segment = ((history ^ path) & (MASK << (i - 1) * MASK_BITS)) >> (i - 1) * MASK_BITS;
+
+				u.weight_index[i] = ((segment) ^ (b.address << 1)) % (NUM_WTS);
+				u.perceptron_output += weight_tables[i][u.weight_index[i]];
+			}
+
+			if (u.perceptron_output >= 0)
+			{
+				u.direction_prediction(true);
+			}
+			else
+			{
+				u.direction_prediction(false);
+			}
 		}
-		if (b.br_flags & BR_INDIRECT) {
-			u.target_prediction (targets[b.address & ((1<<TABLE_BITS)-1)]);
+		else
+		{
+			u.direction_prediction(true);
+		}
+		if (b.br_flags & BR_INDIRECT)
+		{
+			u.target_prediction(targets[b.address & ((1 << TARGET_BITS) - 1)]);
 		}
 		return &u;
 	}
 
-	void update (branch_update *u, bool taken, unsigned int target) {
-		if (bi.br_flags & BR_CONDITIONAL) {
-			unsigned char *c = &tab[((my_update*)u)->index];
-			if (taken) {
-				if (*c < 3) (*c)++;
-			} else {
-				if (*c > 0) (*c)--;
+	void update(branch_update *u, bool taken, unsigned int target)
+	{
+		if (bi.br_flags & BR_CONDITIONAL)
+		{
+			for (int i = 0; i < H; i++)
+			{
+				int *c = &weight_tables[i][((my_update *)u)->weight_index[i]];
+				if (taken)
+				{
+					if (*c < MAX_WEIGHT)
+						(*c)++;
+				}
+				else
+				{
+					if (*c > MIN_WEIGHT)
+						(*c)--;
+				}
 			}
-			history <<= 1;
-			history |= taken;
-			history &= (1<<HISTORY_LENGTH)-1;
 		}
-		if (bi.br_flags & BR_INDIRECT) {
-			targets[bi.address & ((1<<TABLE_BITS)-1)] = target;
+
+		history <<= 1;
+		history |= taken;
+
+		path = bi.address & 0xF;
+		path = path << 1;
+
+		if (bi.br_flags & BR_INDIRECT)
+		{
+			targets[bi.address & ((1 << TARGET_BITS) - 1)] = target;
 		}
 	}
 };

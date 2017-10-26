@@ -1,0 +1,10 @@
+traces/252.eon.trace.xz                 	3.406 1.043
+traces/400.perlbench-41B.trace.xz       	8.002 7.221
+traces/400.perlbench-50B.trace.xz       	6.070 6.915
+traces/403.gcc-16B.trace.xz             	6.717 1.688
+traces/403.gcc-17B.trace.xz             	6.603 2.250
+traces/453.povray-252B.trace.xz         	5.298 2.008
+traces/453.povray-576B.trace.xz         	4.658 2.177
+traces/453.povray-800B.trace.xz         	4.159 2.090
+traces/453.povray-887B.trace.xz         	3.673 2.057
+traces/458.sjeng-1088B.trace.xz         	
