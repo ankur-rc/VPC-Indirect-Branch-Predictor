@@ -1,28 +1,26 @@
 // my_predictor.h
 // This file contains a sample my_predictor class.
-// Merging Gshare and Path indexing in perceptron predictor
+// Global Perceptron Predictor
 
 #include <cmath>
 #include <cstddef>
 #include <cstring>
 
-#define H 64		 //NUmber of weight tables or pipeline stages
-#define NUM_WTS 8192 //Number of weights per table
-#define MASK 0x000003FF
-#define MASK_BITS 10
+#define H 59		 //History length or weights per perceptron
+#define NUM_WTS 1024 //Number of weights per table
+#define TARGET_BITS 15
 #define MAX_WEIGHT 127
 #define MIN_WEIGHT -128
-#define TARGET_BITS 15
 
 class my_update : public branch_update
 {
   public:
-	unsigned int weight_index[H];
+	unsigned int weight_index;
 	int perceptron_output;
 
 	my_update(void)
 	{
-		memset(weight_index, 0, sizeof(weight_index));
+		weight_index = 0;
 		perceptron_output = 0;
 	}
 };
@@ -30,17 +28,16 @@ class my_update : public branch_update
 class my_predictor : public branch_predictor
 {
   public:
-	static const unsigned int theta = 1.93 * H + 14;
+	static const unsigned int THETA = 127; // 1.93*H+14
 	my_update u;
 	branch_info bi;
 
 	unsigned int history;
-	unsigned int path;
 
-	char weight_tables[H][NUM_WTS];
+	char weight_tables[H + 1][NUM_WTS];
 	unsigned int targets[1 << TARGET_BITS];
 
-	my_predictor(void) : history(0), path(0)
+	my_predictor(void) : history(0)
 	{
 		memset(weight_tables, 0, sizeof(weight_tables));
 		memset(targets, 0, sizeof(targets));
@@ -51,16 +48,19 @@ class my_predictor : public branch_predictor
 		bi = b;
 		if (b.br_flags & BR_CONDITIONAL)
 		{
-			u.weight_index[0] = ((b.address) % (NUM_WTS));
-			u.perceptron_output = weight_tables[0][u.weight_index[0]];
+			unsigned int history_lob = history % NUM_WTS;
+			unsigned int address_lob = b.address % NUM_WTS;
+			u.weight_index = history_lob ^ address_lob;
 
-			unsigned int segment;
-			for (int i = 1; i < H; i++)
+			u.perceptron_output = weight_tables[0][u.weight_index];
+
+			for (int i = 1; i < H + 1; i++)
 			{
-				segment = ((history ^ path) & (MASK << (i - 1) * MASK_BITS)) >> (i - 1) * MASK_BITS;
-
-				u.weight_index[i] = ((segment) ^ (b.address << 1)) % (NUM_WTS);
-				u.perceptron_output += weight_tables[i][u.weight_index[i]];
+				unsigned int mask = 1 << (i - 1);
+				if (history & mask) // if history bit is 1
+					u.perceptron_output += weight_tables[i][u.weight_index];
+				else // if history bit is 0 treat as -1 (bipolar conversion)
+					u.perceptron_output -= weight_tables[i][u.weight_index];
 			}
 
 			if (u.perceptron_output >= 0)
@@ -87,27 +87,46 @@ class my_predictor : public branch_predictor
 	{
 		if (bi.br_flags & BR_CONDITIONAL)
 		{
-			for (int i = 0; i < H; i++)
+			bool direction_prediction = ((my_update *)u)->direction_prediction();
+			int prediction_output = ((my_update *)u)->perceptron_output;
+
+			if ((direction_prediction != taken) || (abs(prediction_output) <= THETA))
 			{
-				char *c = &weight_tables[i][((my_update *)u)->weight_index[i]];
-				if (taken)
+				// update the bias
+				char *bias = &weight_tables[0][((my_update *)u)->weight_index];
+				if (direction_prediction == true)
 				{
-					if (*c < MAX_WEIGHT)
-						(*c)++;
+					if (*bias < MAX_WEIGHT)
+						(*bias)++;
 				}
 				else
 				{
-					if (*c > MIN_WEIGHT)
-						(*c)--;
+					if (*bias > MIN_WEIGHT)
+						(*bias)--;
+				}
+
+				// update the weights
+				for (int i = 1; i < H + 1; i++)
+				{
+					bool history_bit = history & (1 << (i - 1));
+					char *weight = &weight_tables[i][((my_update *)u)->weight_index];
+
+					if (history_bit == taken)
+					{
+						if (*weight < MAX_WEIGHT)
+							(*weight)++;
+					}
+					else
+					{
+						if (*weight > MIN_WEIGHT)
+							(*weight)--;
+					}
 				}
 			}
+
+			history <<= 1;
+			history |= taken;
 		}
-
-		history <<= 1;
-		history |= taken;
-
-		path = bi.address & 0xF;
-		path = path << 1;
 
 		if (bi.br_flags & BR_INDIRECT)
 		{
