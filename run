@@ -26,15 +26,15 @@ foreach i ( $trace_list )
 	set stimestamp = `date +%s`
 	
 	set dmpki = `./src/predict $i | tail -1 | sed -e '/^.*IPB; /s///' | sed -e '/direction.*$/s///'`
-	#set impki = `./src/predict $i | tail -1 | sed -e '/^.*direction MPKI; /s///' | sed -e '/indirect.*$/s///'`
+	set impki = `./src/predict $i | tail -1 | sed -e '/^.*direction MPKI; /s///' | sed -e '/indirect.*$/s///'`
 	
 	set etimestamp = `date +%s`
 	set duration = `expr $etimestamp - $stimestamp`
 	printf "Duration: %ss\t Prediction: " $duration 
 	
-	printf "%0.3f %0.3f\n" $dmpki
+	printf "%0.3f %0.3f\n" $dmpki $impki
 	set dsum = `printf "$dsum\n$dmpki\n+\np\n" | dc`
-	#set isum = `printf "$isum\n$impki\n+\np\n" | dc`
+	set isum = `printf "$isum\n$impki\n+\np\n" | dc`
 	@ n = $n + 1
 	
 end
