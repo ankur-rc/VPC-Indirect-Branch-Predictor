@@ -122,7 +122,7 @@ class my_predictor : public branch_predictor
 					done = true;
 				}
 				//case 2 : A miss!
-				else if ((target == 0) || (iter >= MAX_VPC_ITERS - 1))
+				else if ((target == 0) || (iter >= MAX_VPC_ITERS))
 				{
 					u.btb_miss = true;
 					u.predicted_iter = iter; // store predicted iteration
@@ -244,7 +244,7 @@ class my_predictor : public branch_predictor
 						lfu_ctr[bi.address % NUM_LFU_COUNTERS][iter] = ((lfu_val < 127) ? lfu_val++ : 127); // update replacement policy bit
 						found_correct_target = true;
 					}
-					else if (predicted_target && iter <= mu->predicted_iter)
+					else if (predicted_target)
 					{
 						train_predictor(mu->iter_predicted_directions[iter], false, weight_indices, mu->iter_perceptron_outputs[iter]); // train bp on not taken
 					}
