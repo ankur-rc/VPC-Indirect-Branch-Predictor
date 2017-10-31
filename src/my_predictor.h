@@ -17,6 +17,7 @@
 #define MAX_VPC_ITERS 20	// Max number of VPC iterations
 #define NUM_LFU_COUNTERS 1640 	// Size of LFU counter array (~ NUM_TARGETS/MAX_VPC_ITERS)
 
+// set of hard-coded hashes
 static const unsigned int VPC_HASH[19] = {
 	0xbbc346ad, 0x129f47dd, 0xa63dcb5a, 0x3253f058,
 	0xe2186929, 0x891f0f2e, 0x9d891952, 0xbe98e380,
@@ -28,15 +29,15 @@ class my_update : public branch_update
 {
   public:
 	// conditional predictor
-	unsigned int weight_index[H + 1];
-	int perceptron_output;
+	unsigned int weight_index[H + 1];			// Weight indices for the perceptron; since we are using a multi indexed perceptron 
+	int perceptron_output;					// Holds perceptron output
 
-	// indirect predictor
-	unsigned int predicted_iter;
-	bool btb_miss;
-	unsigned int iter_weight_indices[MAX_VPC_ITERS][H + 1];
-	int iter_perceptron_outputs[MAX_VPC_ITERS];
-	bool iter_predicted_directions[MAX_VPC_ITERS];
+	// indirect predictor; set of variables with a preceeding 'iter_' hold respective values for each iteration of the VPC predict algorithm
+	unsigned int predicted_iter;				// predicted iteration
+	bool btb_miss;						// BTB miss flag
+	unsigned int iter_weight_indices[MAX_VPC_ITERS][H + 1];	// Weights of each perceptron for each iteration 
+	int iter_perceptron_outputs[MAX_VPC_ITERS];		// Temporary holder of perceptron output for each iteration
+	bool iter_predicted_directions[MAX_VPC_ITERS];		// Temporary holder of predicted directions for each iteration
 
 	my_update(void)
 	{
