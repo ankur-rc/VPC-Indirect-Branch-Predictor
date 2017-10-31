@@ -11,11 +11,37 @@
 #define MASK_BITS 10		// Number of mask bits set
 #define MAX_WEIGHT 127  	// Max value of bias/weight
 #define MIN_WEIGHT -128 	// Min value of bias/weight
-#define THETA 25		// floor(1.93*H+14); Perceptron optimum value
+#define THETA 25		// floor(1.93*H+14); Perceptron optimum value //derived from paper "Neural Methods for Dynamic Branch prediction"
 
 #define NUM_TARGETS 32768	// Size of the BTB
-#define MAX_VPC_ITERS 20	// Max number of VPC iterations
+#define MAX_VPC_ITERS 20	// Max number of VPC iterations // derived from paper "VPC Prediction"
 #define NUM_LFU_COUNTERS 1640 	// Size of LFU counter array (~ NUM_TARGETS/MAX_VPC_ITERS)
+
+//////////////////////////////////////////////////////////////////////////
+//                                                                      //
+//			         Budget                                 //
+//           								//
+// GHR (A) = 						64 bits		//
+// Path Register (B) = 					64 bits		//
+// Weights per perceptron = 				7      		//
+// Size of each weight table = 				4096		//
+// Size of each weight = 				8 bits		//
+// Total size of weight tables (C) = 4096*7*8 bits = 	229376 bits     //
+// Number of BTB entries = 				32768		//
+// Size of each entry = 				32 bits		//
+// Total size of BTB = 32768*32 (D) = 			1048576 bits	//
+// Entries in LFU counter = 1640*20 = 			32800		//
+// Size of each entry (using 32bits,but needs 8) = 	8 bits 	        //
+// Total size of LFU Counters = 32800*8 (E) = 		262400 bits	//
+// Weight-Index array size = 7*32*20 (F) =		4480 bits	//
+// Perceptron output array size = 32*20 (G) = 		640 bits	//
+// Prediction direction array size = 32*20 (H) =	640 bits	//
+//////////////////////////////////////////////////////////////////////////
+//									//
+// Total Budget: (A+B+C+D+E+F+G+H)					//
+//	       = 1,546,240 bits or 193,280 B or 188.75 kB		//
+//                                                                      //
+//////////////////////////////////////////////////////////////////////////
 
 // set of hard-coded hashes
 static const unsigned int VPC_HASH[19] = {
