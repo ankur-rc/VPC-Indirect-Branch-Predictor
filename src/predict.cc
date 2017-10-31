@@ -61,7 +61,6 @@ int main(int argc, char *argv[])
 		if (!t)
 			break;
 
-		unsigned int flags = t->bi.br_flags;
 		// send this trace to the competitor's code for prediction
 
 		branch_update *u = p->predict(t->bi);
@@ -88,8 +87,8 @@ int main(int argc, char *argv[])
 			// count a target misprediction
 
 			tmiss += u->target_prediction() != t->target;
-			if(u->target_prediction()!=0)
-				printf("Indirect branch predicted: %d Actual: %d\n", u->target_prediction(), t->target);
+			// if(u->target_prediction()!=0)
+			// 	printf("Indirect branch predicted: %d Actual: %d\n", u->target_prediction(), t->target);
 		}
 
 		// update competitor's state
@@ -107,21 +106,21 @@ int main(int argc, char *argv[])
 
 	end_trace();
 
-//	for(int i=0;i<4096;i++){
-//		for(int j=0;j<7;j++){
-//			printf("%d\t",((my_predictor*)p)->weight_tables[j][i]);
-//		}
-//		printf("\n");
-//	}
+	//	for(int i=0;i<4096;i++){
+	//		for(int j=0;j<7;j++){
+	//			printf("%d\t",((my_predictor*)p)->weight_tables[j][i]);
+	//		}
+	//		printf("\n");
+	//	}
 
-
-	printf("Targets\n");
-	int count =0;
-	for(int i=0;i<32768;i++){
-		if(((my_predictor*)p)->targets[i]!=0)
-			count++;
-	}
-	printf("%d\n",count);
+	// printf("Targets\n");
+	// int count = 0;
+	// for (int i = 0; i < 32768; i++)
+	// {
+	// 	if (((my_predictor *)p)->targets[i] != 0)
+	// 		count++;
+	// }
+	// printf("%d\n", count);
 
 	// give final mispredictions per kilo-instruction and exit.
 	// the original CBP2 traces have exactly 100,000,000 instructions.

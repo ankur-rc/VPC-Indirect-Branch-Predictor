@@ -18,7 +18,7 @@
 
 #define NUM_TARGETS 32768	 // Size of the BTB
 #define MAX_VPC_ITERS 20	  // Max number of VPC iterations
-#define NUM_LFU_COUNTERS 1640 // Size of LFU counter array
+#define NUM_LFU_COUNTERS 1640 // Size of LFU counter array (~ NUM_TARGETS/MAX_VPC_ITERS)
 
 static const unsigned int VPC_HASH[20] = {
 	0xbbc346ad, 0x129f47dd, 0xa63dcb5a, 0x3253f058,
@@ -92,18 +92,19 @@ class my_predictor : public branch_predictor
 		if (b.br_flags & BR_INDIRECT) // For indirect branches
 		{
 			// Initialize vpca, vghr, vpath and predicted_target
-			unsigned int vpca = bi.address;
-			std::bitset<HIST_LEN> vghr = history;
-			std::bitset<HIST_LEN> vpath = path;
+			// unsigned int vpca = bi.address;
+			// std::bitset<HIST_LEN> vghr = history;
+			// std::bitset<HIST_LEN> vpath = path;
+
+			unsigned int vpca = bi.address ^ VPC_HASH[0];							   // hash next virtual pc
+			std::bitset<HIST_LEN> vpath = (path << 4).to_ulong() | (bi.address & 0xF); // set virtual path by concatenating 4 bits from current address
+			std::bitset<HIST_LEN> vghr = history << 1;								   // last virtual branch not taken
+
 			unsigned int predicted_target = 0;
-
-			vpath = (vpath << 4).to_ulong() | (vpca & 0xF); // set virtual path
-			vpca = bi.address ^ VPC_HASH[0];				// hash next virtual pc
-			vghr = vghr << 1;								// last virtual branch not taken
-
-			int iter = 0;
 			unsigned int target = 0;
 			bool done = false;
+
+			int iter = 0;
 			while (done == false)
 			{
 				target = targets[vpca % NUM_TARGETS];
@@ -128,7 +129,7 @@ class my_predictor : public branch_predictor
 					u.predicted_iter = iter; // store predicted iteration
 					done = true;
 				}
-				//case 3: Predicted as not taken!
+				//case 3: Predicted as not taken and move to next vpca!
 				vpath = (vpath << 4).to_ulong() | (vpca & 0xF); // set virtual path
 				vpca = bi.address ^ VPC_HASH[iter];				// hash next virtual pc
 				vghr = vghr << 1;								// last virtual branch not taken
@@ -136,7 +137,6 @@ class my_predictor : public branch_predictor
 			}
 
 			u.target_prediction(predicted_target);
-			printf("\npredicted  iter: %d\n", u.predicted_iter);
 		}
 
 		return &u;
@@ -149,7 +149,7 @@ class my_predictor : public branch_predictor
 
 		bool taken = false;
 
-		u.weight_index[0] = ((address) % (NUM_WTS));			   // Bias is obtained by address
+		u.weight_index[0] = ((address) % (NUM_WTS));			   // Bias is obtained by the address
 																   // lower order bits
 		u.perceptron_output = weight_tables[0][u.weight_index[0]]; // Add bias to perceptron output
 
@@ -180,7 +180,8 @@ class my_predictor : public branch_predictor
 	{
 		if (bi.br_flags & BR_CONDITIONAL) // for conditional branches
 		{
-			train_predictor(u->direction_prediction(), taken, ((my_update *)u)->weight_index, ((my_update *)u)->perceptron_output);
+			train_predictor(u->direction_prediction(), taken,
+							((my_update *)u)->weight_index, ((my_update *)u)->perceptron_output);
 
 			history <<= 1;
 			history |= taken;
@@ -220,6 +221,7 @@ class my_predictor : public branch_predictor
 					iter++;
 				}
 			}
+
 			// case 2: when prediction is incorrect
 			else
 			{
@@ -228,6 +230,7 @@ class my_predictor : public branch_predictor
 				bool found_correct_target = false;
 
 				int iter = 0;
+				//case 1: wrong-target case
 				while ((iter < MAX_VPC_ITERS) && (found_correct_target == false))
 				{
 					unsigned int weight_indices[H + 1] = {0}; // store the weight indices
@@ -239,7 +242,8 @@ class my_predictor : public branch_predictor
 					unsigned int predicted_target = targets[vpca % NUM_TARGETS];
 					if (predicted_target == target)
 					{
-						train_predictor(false, true, weight_indices, mu->iter_perceptron_outputs[iter]); // train bp on taken
+						train_predictor(mu->iter_predicted_directions[iter], true,
+										weight_indices, mu->iter_perceptron_outputs[iter]); // train bp on taken
 						char lfu_val = lfu_ctr[bi.address % NUM_LFU_COUNTERS][iter];
 						lfu_ctr[bi.address % NUM_LFU_COUNTERS][iter] = ((lfu_val < 127) ? lfu_val++ : 127); // update replacement policy bit
 						found_correct_target = true;
@@ -253,6 +257,7 @@ class my_predictor : public branch_predictor
 					iter++;
 				}
 
+				// case 2: no-target case
 				if (!found_correct_target)
 				{
 					int iter = 0;
@@ -271,14 +276,15 @@ class my_predictor : public branch_predictor
 
 					unsigned int vpca = bi.address ^ VPC_HASH[iter];
 					targets[vpca % NUM_TARGETS] = target;
-					lfu_ctr[bi.address % NUM_LFU_COUNTERS][iter] = 1;
+					lfu_ctr[bi.address % NUM_LFU_COUNTERS][iter] = 1; // update the lfu counter
 
 					unsigned int weight_indices[H + 1] = {0}; // store the weight indices
 					for (int i = 0; i < H + 1; i++)			  // of current iter in temp array
 					{
 						weight_indices[i] = mu->iter_weight_indices[iter][i];
 					}
-					train_predictor(mu->iter_predicted_directions[iter], true, weight_indices, mu->iter_perceptron_outputs[iter]);
+					train_predictor(mu->iter_predicted_directions[iter], true,
+									weight_indices, mu->iter_perceptron_outputs[iter]); // Train the predictor on taken
 				}
 			}
 		}
@@ -294,16 +300,16 @@ class my_predictor : public branch_predictor
 
 		if ((direction_prediction != taken) || (abs(prediction_output) <= THETA))
 		{
-			for (int i = 0; i < H + 1; i++)
+			for (int i = 0; i < H + 1; i++) // Loop through the weight indices
 			{
 				unsigned int weight_index = weight_indices[i];
 				char *c = &weight_tables[i][weight_index];
 
-				if (taken)
+				if (taken) // increase weight, if branch was taken
 				{
 					*c < MAX_WEIGHT ? (*c)++ : MAX_WEIGHT;
 				}
-				else
+				else // else, decrease
 				{
 					*c > MIN_WEIGHT ? (*c)-- : MIN_WEIGHT;
 				}
