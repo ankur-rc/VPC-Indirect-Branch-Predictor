@@ -1,4 +1,0 @@
-Global Start Time: 20:49:19
-traces/252.eon.trace.xz                 	Duration: 1s	 Prediction: 1.022 0.000
-traces/400.perlbench-41B.trace.xz       	Duration: 18s	 Prediction: 3.475 0.000
-traces/400.perlbench-50B.trace.xz       	

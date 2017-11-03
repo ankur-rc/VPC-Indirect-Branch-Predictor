@@ -1,0 +1,156 @@
+///////////////////////////////dmpki/////////////////////////////////////////////////////
+
+\begin{tikzpicture}[scale=0.85]
+  \begin{axis}[
+    enlargelimits=0.15,
+    legend style={at={(0.5,-0.2)},
+      anchor=north,legend columns=-1},
+    ylabel={Direction MPKI},
+    symbolic x coords={GShare, Global Perceptron, mi\_AsG\_X\_6\_2048, mi\_PsG\_X\_6\_2048, mi\_PsG\_X\_6\_4096},
+    xtick=data,
+    nodes near coords, 
+	nodes near coords align={vertical},
+    x tick label style={rotate=45,anchor=east},
+    ]
+    \addplot+[smooth] coordinates {(GShare, 7.156) (Global Perceptron,4.293 ) (mi\_AsG\_X\_6\_2048, 4.175) (mi\_PsG\_X\_6\_2048, 4.108) (mi\_PsG\_X\_6\_4096, 4.073)};
+  \end{axis}
+\end{tikzpicture}
+
+//////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////algo 1/////////////////////////////////////
+
+\begin{algorithm}[ht]
+\SetAlgoLined
+\KwIn{past\_pc[], history}
+\KwOut{prediction:\{-1,1\}}
+\BlankLine
+ index[0] := past\_pc[0]\;
+ out := W[0, index[0]]\;
+ \For{$j\leftarrow 1$ \KwTo $h$}
+ {
+ 	segment := (history $\bigoplus$ path) $\&$ mask\;
+    index[j] := (segment $\bigoplus$ address)\;
+    out := out $+$ W[j, index[j]]\;
+ }
+  \eIf{out $<$ 0}{
+   prediction := -1\;
+   }{
+   prediction := 1\;
+  }
+  \caption{ mi\_PsG\_X Prediction Algorithm}
+\end{algorithm}
+
+//////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////algo 2/////////////////////////////////////
+
+\begin{algorithm}[ht]
+\SetAlgoLined
+\KwIn{index[], out, prediction, outcome}
+\BlankLine 
+  \eIf{prediction $\neq$ outcome \textbf{or} $|out| \leq \theta$ }{
+   \For{$j\leftarrow 0$ \KwTo $h$}
+ {
+ 	W[j, index[j]] := W[j, index[j]] $+$ outcome\;
+ }
+   }{}
+  \caption{ mi\_PsG\_X Training Algorithm}
+\end{algorithm}
+
+//////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////algo 3/////////////////////////////////////
+
+\begin{algorithm}[ht]
+\SetAlgoLined
+\KwIn{past\_pc[], history, path}
+\KwOut{target}
+\BlankLine
+ iter := 1\;
+ VPCA := past\_pc[0]\;
+ done := false\;
+ \While{!done}{
+ 	predicted\_target := access\_btb(VPCA)\;
+    predicted\_direction := access\_conditional\_BP(VPCA, VGHR, VPATH)\;
+    \uIf{predicted\_target \& predicted\_direction := TAKEN}{
+    	target := predicted\_target\;
+        done := true\;
+    }\uElseIf{!predicted\_target \textbf{or} iter $\geq$ MAX\_ITER}{
+    	btb\_miss := true\;
+        done := true\;
+    }
+    
+    VPCA := HASH(PC, iter)\;
+     VGHR := LeftShift(VGHR)\;
+      VPATH := (VPATH $<<$ 4) $|$ (VPCA \& 0xF)\;
+       iter$++$ \;
+ }
+  \caption{ VPC Training Algorithm (adapted for mi\_PsG\_X)}
+\end{algorithm}
+
+
+//////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////algo 4/////////////////////////////////////
+
+\begin{algorithm}[ht]
+\SetAlgoLined
+\KwIn{past\_pc[]}
+\BlankLine
+ iter := 1\;
+ VPCA := past\_pc[0]\;
+ done := false\;
+ \While{iter $<$ predicted\_iter}{
+    \uIf{iter = predicted\_iter}{
+    	update\_conditional\_BP(TAKEN)\;
+        update\_replacement\_policy(VPCA)\;
+    }\uElseIf{!predicted\_target \textbf{or} iter $\geq$ MAX\_ITER}{
+    	update\_conditional\_BP(NOT-TAKEN)\;
+    }
+    VPCA := HASH(PC, iter)\;
+    iter$++$ \;
+ }
+  \caption{ VPC Training Algorithm when prediction is correct (adapted for mi\_PsG\_X)}
+\end{algorithm}
+
+//////////////////////////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////algo 5/////////////////////////////////////
+
+\begin{algorithm}[ht]
+\SetAlgoLined
+\KwIn{past\_pc[]}
+\BlankLine
+ iter := 1\;
+ VPCA := past\_pc[0]\;
+ found\_correct\_target := false\;
+ \While{iter $<$ MAX\_ITER \textbf{and} found\_correct\_target $=$ false}{
+ 	predicted\_target := access\_BTB(VPCA)\;
+    \uIf{predicted\_target $=$ CORRECT\_TARGET}{
+    	update\_conditional\_BP(TAKEN)\;
+        update\_replacement\_policy(VPCA)\;
+        found\_correct\_target := true\;
+    }
+    \uElseIf{!predicted\_target}{
+    	update\_conditional\_BP(NOT-TAKEN)\;
+    }
+    VPCA := HASH(PC, iter)\;
+    iter$++$ \;
+ }
+ \BlankLine
+ \tcc{no-target case}
+ \uIf{found\_correct\_target =  false}{
+ 		\uIf{btb\_miss}
+        	{VPCA := HASH(past\_pc[0], predicted\_iter)\;}
+        \uElse
+        	{VPCA := HASH(past\_pc[0], min(LFU\_counter\_index))\;}
+        insert\_BTB(VPCA, CORRECT\_TARGET)\;
+    	update\_conditional\_BP(TAKEN)\;
+        update\_replacement\_policy(VPCA)\;
+    }
+  \caption{ VPC Training Algorithm when prediction is incorrect (adapted for mi\_PsG\_X)}
+\end{algorithm}
+
+
+//////////////////////////////////////////////////////////////////////////////////////
